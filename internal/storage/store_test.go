@@ -3,25 +3,34 @@ package storage
 import (
 	"sync"
 	"testing"
+
+	"github.com/MuhammadBilal64/go-scale/internal/persistence"
 )
 
 type fakePersistence struct {
-	data map[string]string
+	entries []persistence.Entry
 }
 
-func (f *fakePersistence) Save(data map[string]string) error {
-	data = data
+func (f *fakePersistence) Append(entry persistence.Entry) error {
+	f.entries = append(f.entries, entry)
 	return nil
 }
+
 func (f *fakePersistence) Load() (map[string]string, error) {
-	return f.data, nil
+	data := make(map[string]string)
+	for _, entry := range f.entries {
+		switch entry.Op {
+		case persistence.OpSet:
+			data[entry.Key] = entry.Value
+		case persistence.OpDelete:
+			delete(data, entry.Key)
+		}
+	}
+	return data, nil
 }
 
 func TestStoreGetAndSet(t *testing.T) {
-	persistence := &fakePersistence{
-		data: make(map[string]string),
-	}
-	store := NewStore(persistence)
+	store := NewStore(&fakePersistence{})
 
 	store.Set("name", "Bilal")
 
@@ -32,13 +41,10 @@ func TestStoreGetAndSet(t *testing.T) {
 	if value != "Bilal" {
 		t.Fatalf("expected Bilal, got %s", value)
 	}
-
 }
+
 func TestStoreGetMissing(t *testing.T) {
-	persistence := &fakePersistence{
-		data: make(map[string]string),
-	}
-	store := NewStore(persistence)
+	store := NewStore(&fakePersistence{})
 	value, exists := store.Get("not-a-problem")
 
 	if exists {
@@ -49,11 +55,9 @@ func TestStoreGetMissing(t *testing.T) {
 		t.Fatalf("expected empty value, got %s", value)
 	}
 }
+
 func TestStoreDelete(t *testing.T) {
-	persistence := &fakePersistence{
-		data: make(map[string]string),
-	}
-	store := NewStore(persistence)
+	store := NewStore(&fakePersistence{})
 	store.Set("name", "bilal")
 	store.Delete("name")
 	_, exists := store.Get("name")
@@ -61,12 +65,10 @@ func TestStoreDelete(t *testing.T) {
 		t.Fatal("expected key not to exist after deletion")
 	}
 }
+
 func TestStoreConcurrentAccess(t *testing.T) {
 	var wg sync.WaitGroup
-	persistence := &fakePersistence{
-		data: make(map[string]string),
-	}
-	store := NewStore(persistence)
+	store := NewStore(&fakePersistence{})
 	wg.Add(2)
 	go func() {
 		defer wg.Done()
@@ -78,16 +80,15 @@ func TestStoreConcurrentAccess(t *testing.T) {
 		store.Set("Name", "Malik")
 	}()
 	wg.Wait()
-
 }
 
 func TestStoreLoad(t *testing.T) {
-	persistence := &fakePersistence{
-		data: map[string]string{
-			"name": "Bilal",
+	persistenceLayer := &fakePersistence{
+		entries: []persistence.Entry{
+			{Op: persistence.OpSet, Key: "name", Value: "Bilal"},
 		},
 	}
-	store := NewStore(persistence)
+	store := NewStore(persistenceLayer)
 
 	if err := store.Load(); err != nil {
 		t.Fatalf("expected Load to succeed, got %v", err)
@@ -99,5 +100,20 @@ func TestStoreLoad(t *testing.T) {
 	}
 	if value != "Bilal" {
 		t.Fatalf("expected Bilal, got %s", value)
+	}
+}
+
+func TestStoreSetAppendsBeforeMemory(t *testing.T) {
+	p := &fakePersistence{}
+	store := NewStore(p)
+
+	if err := store.Set("name", "Bilal"); err != nil {
+		t.Fatalf("set: %v", err)
+	}
+	if len(p.entries) != 1 {
+		t.Fatalf("expected 1 wal entry, got %d", len(p.entries))
+	}
+	if p.entries[0].Op != persistence.OpSet || p.entries[0].Key != "name" {
+		t.Fatalf("unexpected entry: %+v", p.entries[0])
 	}
 }

@@ -13,7 +13,7 @@ import (
 	"github.com/MuhammadBilal64/go-scale/internal/storage"
 )
 
-const dataFilePath = "data.json"
+const walFilePath = "data.wal"
 
 type Server struct {
 	store *storage.Store
@@ -103,8 +103,8 @@ func healthHandler(w http.ResponseWriter, r *http.Request) {
 	w.Write([]byte("OK"))
 }
 func main() {
-	filePersistence := persistence.NewFilePersistence(dataFilePath)
-	store := storage.NewStore(filePersistence)
+	wal := persistence.NewWAL(walFilePath)
+	store := storage.NewStore(wal)
 	if err := store.Load(); err != nil {
 		log.Fatalf("failed to load store: %v", err)
 	}
