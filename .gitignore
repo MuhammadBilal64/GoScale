@@ -1,0 +1,5 @@
+# Runtime persistence (local server data)
+data.json
+data.wal
+snapshot.json
+*.tmp
