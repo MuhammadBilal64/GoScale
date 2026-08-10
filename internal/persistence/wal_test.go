@@ -70,3 +70,31 @@ func TestWALSurvivesRestart(t *testing.T) {
 		t.Fatal("expected wal file to contain data")
 	}
 }
+
+func TestWALTruncate(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "data.wal")
+	wal := NewWAL(path)
+
+	if err := wal.Append(Entry{Op: OpSet, Key: "name", Value: "Bilal"}); err != nil {
+		t.Fatalf("append: %v", err)
+	}
+	if err := wal.Truncate(); err != nil {
+		t.Fatalf("truncate: %v", err)
+	}
+
+	info, err := os.Stat(path)
+	if err != nil {
+		t.Fatalf("stat: %v", err)
+	}
+	if info.Size() != 0 {
+		t.Fatalf("expected empty wal, size=%d", info.Size())
+	}
+
+	data, err := wal.Load()
+	if err != nil {
+		t.Fatalf("load: %v", err)
+	}
+	if len(data) != 0 {
+		t.Fatalf("expected empty map after truncate, got %v", data)
+	}
+}

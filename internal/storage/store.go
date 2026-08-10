@@ -33,7 +33,7 @@ func (s *Store) Set(key, value string) error {
 	}
 
 	s.data[key] = value
-	return nil
+	return s.persistence.Compact(s.data)
 }
 
 func (s *Store) Get(key string) (string, bool) {
@@ -55,7 +55,7 @@ func (s *Store) Delete(key string) error {
 	}
 
 	delete(s.data, key)
-	return nil
+	return s.persistence.Compact(s.data)
 }
 
 func (s *Store) Load() error {

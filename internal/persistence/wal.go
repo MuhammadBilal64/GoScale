@@ -35,16 +35,24 @@ func (w *WAL) Append(entry Entry) error {
 }
 
 func (w *WAL) Load() (map[string]string, error) {
+	return w.Replay(make(map[string]string))
+}
+
+// Replay applies WAL entries on top of base and returns the result.
+func (w *WAL) Replay(base map[string]string) (map[string]string, error) {
+	if base == nil {
+		base = make(map[string]string)
+	}
+
 	f, err := os.Open(w.path)
 	if err != nil {
 		if os.IsNotExist(err) {
-			return make(map[string]string), nil
+			return base, nil
 		}
 		return nil, err
 	}
 	defer f.Close()
 
-	data := make(map[string]string)
 	scanner := bufio.NewScanner(f)
 	for scanner.Scan() {
 		line := scanner.Bytes()
@@ -59,14 +67,24 @@ func (w *WAL) Load() (map[string]string, error) {
 
 		switch entry.Op {
 		case OpSet:
-			data[entry.Key] = entry.Value
+			base[entry.Key] = entry.Value
 		case OpDelete:
-			delete(data, entry.Key)
+			delete(base, entry.Key)
 		}
 	}
 	if err := scanner.Err(); err != nil {
 		return nil, err
 	}
 
-	return data, nil
+	return base, nil
+}
+
+// Truncate clears the WAL after a successful snapshot.
+func (w *WAL) Truncate() error {
+	f, err := os.OpenFile(w.path, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0644)
+	if err != nil {
+		return err
+	}
+	defer f.Close()
+	return f.Sync()
 }

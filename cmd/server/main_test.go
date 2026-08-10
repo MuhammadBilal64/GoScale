@@ -13,8 +13,13 @@ import (
 
 func newTestStore(t *testing.T) *storage.Store {
 	t.Helper()
-	path := filepath.Join(t.TempDir(), "data.wal")
-	return storage.NewStore(persistence.NewWAL(path))
+	dir := t.TempDir()
+	engine := persistence.NewEngine(
+		filepath.Join(dir, "data.wal"),
+		filepath.Join(dir, "snapshot.json"),
+		100,
+	)
+	return storage.NewStore(engine)
 }
 
 func TestKVHandlerGet(t *testing.T) {

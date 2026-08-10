@@ -13,7 +13,9 @@ type Entry struct {
 }
 
 // Persistence stores changes durably and can rebuild state by replaying them.
+// Compact may write a snapshot and clear the WAL when enough ops have accumulated.
 type Persistence interface {
 	Append(entry Entry) error
 	Load() (map[string]string, error)
+	Compact(data map[string]string) error
 }

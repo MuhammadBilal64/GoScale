@@ -29,6 +29,10 @@ func (f *fakePersistence) Load() (map[string]string, error) {
 	return data, nil
 }
 
+func (f *fakePersistence) Compact(data map[string]string) error {
+	return nil
+}
+
 func TestStoreGetAndSet(t *testing.T) {
 	store := NewStore(&fakePersistence{})
 
