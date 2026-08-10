@@ -1,8 +1,9 @@
 package persistence
 
 import (
-	"bufio"
 	"encoding/json"
+	"errors"
+	"io"
 	"os"
 )
 
@@ -51,17 +52,37 @@ func (w *WAL) Replay(base map[string]string) (map[string]string, error) {
 		}
 		return nil, err
 	}
-	defer f.Close()
-
-	scanner := bufio.NewScanner(f)
-	for scanner.Scan() {
-		line := scanner.Bytes()
-		if len(line) == 0 {
-			continue
+	needClose := true
+	defer func() {
+		if needClose {
+			f.Close()
 		}
+	}()
 
+	info, err := f.Stat()
+	if err != nil {
+		return nil, err
+	}
+
+	dec := json.NewDecoder(f)
+	for {
+		offset := dec.InputOffset()
 		var entry Entry
-		if err := json.Unmarshal(line, &entry); err != nil {
+		err := dec.Decode(&entry)
+		if errors.Is(err, io.EOF) {
+			break
+		}
+		if err != nil {
+			// A crash can leave a partial JSON record at the end of the file.
+			// That write was never acknowledged, so discard the torn tail.
+			if errors.Is(err, io.ErrUnexpectedEOF) || dec.InputOffset() >= info.Size() {
+				needClose = false
+				_ = f.Close()
+				if truncErr := os.Truncate(w.path, offset); truncErr != nil {
+					return nil, truncErr
+				}
+				break
+			}
 			return nil, err
 		}
 
@@ -71,9 +92,6 @@ func (w *WAL) Replay(base map[string]string) (map[string]string, error) {
 		case OpDelete:
 			delete(base, entry.Key)
 		}
-	}
-	if err := scanner.Err(); err != nil {
-		return nil, err
 	}
 
 	return base, nil

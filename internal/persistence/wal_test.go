@@ -71,6 +71,59 @@ func TestWALSurvivesRestart(t *testing.T) {
 	}
 }
 
+func TestWALReplayLargeValue(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "data.wal")
+	wal := NewWAL(path)
+
+	large := make([]byte, 100*1024)
+	for i := range large {
+		large[i] = 'a'
+	}
+	if err := wal.Append(Entry{Op: OpSet, Key: "big", Value: string(large)}); err != nil {
+		t.Fatalf("append: %v", err)
+	}
+
+	data, err := wal.Load()
+	if err != nil {
+		t.Fatalf("load large value: %v", err)
+	}
+	if len(data["big"]) != len(large) {
+		t.Fatalf("expected %d bytes, got %d", len(large), len(data["big"]))
+	}
+}
+
+func TestWALReplayIgnoresTornTail(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "data.wal")
+	wal := NewWAL(path)
+
+	if err := wal.Append(Entry{Op: OpSet, Key: "name", Value: "Bilal"}); err != nil {
+		t.Fatalf("append: %v", err)
+	}
+	if err := os.WriteFile(path, append(mustRead(t, path), []byte(`{"op":"set","key":"x","val`)...), 0644); err != nil {
+		t.Fatalf("write torn tail: %v", err)
+	}
+
+	data, err := wal.Load()
+	if err != nil {
+		t.Fatalf("load with torn tail: %v", err)
+	}
+	if data["name"] != "Bilal" {
+		t.Fatalf("expected Bilal after torn-tail recovery, got %s", data["name"])
+	}
+	if _, exists := data["x"]; exists {
+		t.Fatal("torn entry should not be applied")
+	}
+}
+
+func mustRead(t *testing.T, path string) []byte {
+	t.Helper()
+	data, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("read: %v", err)
+	}
+	return data
+}
+
 func TestWALTruncate(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "data.wal")
 	wal := NewWAL(path)

@@ -33,7 +33,9 @@ func (s *Store) Set(key, value string) error {
 	}
 
 	s.data[key] = value
-	return s.persistence.Compact(s.data)
+	// Compaction is maintenance. The write already succeeded; keep the WAL if compact fails.
+	_ = s.persistence.Compact(s.data)
+	return nil
 }
 
 func (s *Store) Get(key string) (string, bool) {
@@ -55,7 +57,8 @@ func (s *Store) Delete(key string) error {
 	}
 
 	delete(s.data, key)
-	return s.persistence.Compact(s.data)
+	_ = s.persistence.Compact(s.data)
+	return nil
 }
 
 func (s *Store) Load() error {

@@ -121,3 +121,29 @@ func TestStoreSetAppendsBeforeMemory(t *testing.T) {
 		t.Fatalf("unexpected entry: %+v", p.entries[0])
 	}
 }
+
+type failingCompactPersistence struct {
+	fakePersistence
+}
+
+func (f *failingCompactPersistence) Compact(data map[string]string) error {
+	return errCompactFailed
+}
+
+var errCompactFailed = &compactError{"compact failed"}
+
+type compactError struct{ msg string }
+
+func (e *compactError) Error() string { return e.msg }
+
+func TestStoreSetSucceedsWhenCompactFails(t *testing.T) {
+	store := NewStore(&failingCompactPersistence{})
+
+	if err := store.Set("name", "Bilal"); err != nil {
+		t.Fatalf("expected Set to succeed when compact fails, got %v", err)
+	}
+	value, exists := store.Get("name")
+	if !exists || value != "Bilal" {
+		t.Fatalf("expected Bilal in memory, got %q exists=%v", value, exists)
+	}
+}
