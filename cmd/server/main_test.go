@@ -1,12 +1,14 @@
 package main
 
 import (
+	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"path/filepath"
 	"strings"
 	"testing"
 
+	"github.com/MuhammadBilal64/go-scale/internal/node"
 	"github.com/MuhammadBilal64/go-scale/internal/persistence"
 	"github.com/MuhammadBilal64/go-scale/internal/storage"
 )
@@ -22,12 +24,23 @@ func newTestStore(t *testing.T) *storage.Store {
 	return storage.NewStore(engine)
 }
 
+func newTestServer(t *testing.T, peers []node.Peer) Server {
+	t.Helper()
+	return Server{
+		store:      newTestStore(t),
+		self:       node.Node{ID: "node-1", Addr: ":8085"},
+		membership: node.NewMembership(peers),
+	}
+}
+
 func TestKVHandlerGet(t *testing.T) {
 	store := newTestStore(t)
 	store.Set("name", "Bilal")
 
 	server := Server{
-		store: store,
+		store:      store,
+		self:       node.Node{ID: "node-1", Addr: ":8085"},
+		membership: node.NewMembership(nil),
 	}
 
 	mux := http.NewServeMux()
@@ -39,12 +52,9 @@ func TestKVHandlerGet(t *testing.T) {
 		t.Fatalf("expected status 200,got %d", rec.Code)
 	}
 }
-func TestKVHandlerGetMissing(t *testing.T) {
-	store := newTestStore(t)
 
-	server := Server{
-		store: store,
-	}
+func TestKVHandlerGetMissing(t *testing.T) {
+	server := newTestServer(t, nil)
 
 	mux := http.NewServeMux()
 	mux.HandleFunc("/kv/{key}", server.kvHandler)
@@ -65,11 +75,7 @@ func TestKVHandlerGetMissing(t *testing.T) {
 }
 
 func TestKVHandlerPut(t *testing.T) {
-	store := newTestStore(t)
-
-	server := Server{
-		store: store,
-	}
+	server := newTestServer(t, nil)
 
 	mux := http.NewServeMux()
 	mux.HandleFunc("/kv/{key}", server.kvHandler)
@@ -88,7 +94,7 @@ func TestKVHandlerPut(t *testing.T) {
 		t.Fatalf("expected status 200, got %d", rec.Code)
 	}
 
-	value, exists := store.Get("name")
+	value, exists := server.store.Get("name")
 
 	if !exists {
 		t.Fatal("expected key to exist")
@@ -97,14 +103,10 @@ func TestKVHandlerPut(t *testing.T) {
 	if value != "Bilal" {
 		t.Fatalf("expected Bilal, got %s", value)
 	}
-
 }
-func TestKVHandlerPutInvalidJSON(t *testing.T) {
-	store := newTestStore(t)
 
-	server := Server{
-		store: store,
-	}
+func TestKVHandlerPutInvalidJSON(t *testing.T) {
+	server := newTestServer(t, nil)
 
 	mux := http.NewServeMux()
 	mux.HandleFunc("/kv/{key}", server.kvHandler)
@@ -123,13 +125,10 @@ func TestKVHandlerPutInvalidJSON(t *testing.T) {
 		t.Fatalf("expected status 400, got %d", rec.Code)
 	}
 }
-func TestKVHandlerDelete(t *testing.T) {
-	store := newTestStore(t)
-	store.Set("name", "Bilal")
 
-	server := Server{
-		store: store,
-	}
+func TestKVHandlerDelete(t *testing.T) {
+	server := newTestServer(t, nil)
+	server.store.Set("name", "Bilal")
 
 	mux := http.NewServeMux()
 	mux.HandleFunc("/kv/{key}", server.kvHandler)
@@ -148,9 +147,61 @@ func TestKVHandlerDelete(t *testing.T) {
 		t.Fatalf("expected status 200, got %d", rec.Code)
 	}
 
-	_, exists := store.Get("name")
+	_, exists := server.store.Get("name")
 
 	if exists {
 		t.Fatal("expected key to be deleted")
+	}
+}
+
+func TestNodeInfoHandler(t *testing.T) {
+	server := newTestServer(t, nil)
+
+	mux := http.NewServeMux()
+	mux.HandleFunc("/node/info", server.nodeInfoHandler)
+
+	req := httptest.NewRequest(http.MethodGet, "/node/info", nil)
+	rec := httptest.NewRecorder()
+	mux.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", rec.Code)
+	}
+
+	var info node.Node
+	if err := json.Unmarshal(rec.Body.Bytes(), &info); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	if info.ID != "node-1" || info.Addr != ":8085" {
+		t.Fatalf("unexpected info: %+v", info)
+	}
+}
+
+func TestClusterHandler(t *testing.T) {
+	server := newTestServer(t, []node.Peer{
+		{ID: "node-2", Addr: "http://127.0.0.1:8086"},
+	})
+	server.membership.RecordSuccess("node-2")
+
+	mux := http.NewServeMux()
+	mux.HandleFunc("/cluster", server.clusterHandler)
+
+	req := httptest.NewRequest(http.MethodGet, "/cluster", nil)
+	rec := httptest.NewRecorder()
+	mux.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", rec.Code)
+	}
+
+	var resp clusterResponse
+	if err := json.Unmarshal(rec.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	if resp.Self.ID != "node-1" {
+		t.Fatalf("unexpected self: %+v", resp.Self)
+	}
+	if len(resp.Peers) != 1 || resp.Peers[0].ID != "node-2" || resp.Peers[0].Status != node.StatusAlive {
+		t.Fatalf("unexpected peers: %+v", resp.Peers)
 	}
 }

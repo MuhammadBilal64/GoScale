@@ -33,7 +33,13 @@ func (e *Engine) Load() (map[string]string, error) {
 	if err != nil {
 		return nil, err
 	}
-	return e.wal.Replay(base)
+	data, count, err := e.wal.Replay(base)
+	if err != nil {
+		return nil, err
+	}
+	// Preserve compaction progress across restarts.
+	e.sinceCompact = count
+	return data, nil
 }
 
 // Compact writes a snapshot and truncates the WAL once enough appends have happened.
