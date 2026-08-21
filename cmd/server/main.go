@@ -38,6 +38,11 @@ func (s *Server) kvHandler(w http.ResponseWriter, r *http.Request) {
 
 		w.WriteHeader(http.StatusOK)
 		w.Write([]byte("Value stored"))
+	case http.MethodDelete:
+		s.store.Delete(key)
+
+		w.WriteHeader(http.StatusOK)
+		w.Write([]byte("Value deleted"))
 
 	default:
 		http.Error(w, "Method Not Allowed", http.StatusMethodNotAllowed)
