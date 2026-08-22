@@ -14,6 +14,10 @@ type Server struct {
 type SetRequest struct {
 	Value string `json:"value"`
 }
+type GetResponse struct {
+	Key   string `json:"key"`
+	Value string `json:"value"`
+}
 
 func (s *Server) kvHandler(w http.ResponseWriter, r *http.Request) {
 	key := r.PathValue("key")
@@ -25,8 +29,13 @@ func (s *Server) kvHandler(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, "Key not found", http.StatusNotFound)
 			return
 		}
+		response := GetResponse{
+			Key:   key,
+			Value: value,
+		}
+		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusOK)
-		w.Write([]byte(value))
+		json.NewEncoder(w).Encode(response)
 	case http.MethodPut:
 		var req SetRequest
 		err := json.NewDecoder(r.Body).Decode(&req)
@@ -37,12 +46,25 @@ func (s *Server) kvHandler(w http.ResponseWriter, r *http.Request) {
 		s.store.Set(key, req.Value)
 
 		w.WriteHeader(http.StatusOK)
-		w.Write([]byte("Value stored"))
+		response := map[string]string{
+			"message": "value stored",
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+
+		json.NewEncoder(w).Encode(response)
 	case http.MethodDelete:
 		s.store.Delete(key)
 
+		response := map[string]string{
+			"message": "value deleted",
+		}
+
+		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusOK)
-		w.Write([]byte("Value deleted"))
+
+		json.NewEncoder(w).Encode(response)
 
 	default:
 		http.Error(w, "Method Not Allowed", http.StatusMethodNotAllowed)
