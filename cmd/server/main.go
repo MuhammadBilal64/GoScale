@@ -18,7 +18,15 @@ type GetResponse struct {
 	Key   string `json:"key"`
 	Value string `json:"value"`
 }
+type ErrorResponse struct {
+	Error string `json:"error"`
+}
 
+func writeJSON(w http.ResponseWriter, status int, data any) {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(status)
+	json.NewEncoder(w).Encode(data)
+}
 func (s *Server) kvHandler(w http.ResponseWriter, r *http.Request) {
 	key := r.PathValue("key")
 
@@ -26,34 +34,28 @@ func (s *Server) kvHandler(w http.ResponseWriter, r *http.Request) {
 	case http.MethodGet:
 		value, exists := s.store.Get(key)
 		if !exists {
-			http.Error(w, "Key not found", http.StatusNotFound)
+			writeJSON(w, http.StatusNotFound, ErrorResponse{Error: "key not found"})
 			return
 		}
 		response := GetResponse{
 			Key:   key,
 			Value: value,
 		}
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusOK)
-		json.NewEncoder(w).Encode(response)
+		writeJSON(w, http.StatusOK, response)
 	case http.MethodPut:
 		var req SetRequest
 		err := json.NewDecoder(r.Body).Decode(&req)
 		if err != nil {
-			http.Error(w, "Invalid JSON", http.StatusBadRequest)
+			writeJSON(w, http.StatusBadRequest, ErrorResponse{Error: "invalid Json"})
 			return
 		}
 		s.store.Set(key, req.Value)
 
-		w.WriteHeader(http.StatusOK)
 		response := map[string]string{
 			"message": "value stored",
 		}
 
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusOK)
-
-		json.NewEncoder(w).Encode(response)
+		writeJSON(w, http.StatusOK, response)
 	case http.MethodDelete:
 		s.store.Delete(key)
 
@@ -61,13 +63,15 @@ func (s *Server) kvHandler(w http.ResponseWriter, r *http.Request) {
 			"message": "value deleted",
 		}
 
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusOK)
-
-		json.NewEncoder(w).Encode(response)
-
+		writeJSON(w, http.StatusOK, response)
 	default:
-		http.Error(w, "Method Not Allowed", http.StatusMethodNotAllowed)
+		writeJSON(
+			w,
+			http.StatusMethodNotAllowed,
+			ErrorResponse{
+				Error: "method not allowed",
+			},
+		)
 	}
 }
 
