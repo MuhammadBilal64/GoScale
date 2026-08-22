@@ -1,11 +1,14 @@
 package main
 
 import (
+	"context"
+	"encoding/json"
 	"net/http"
+	"os"
+	"os/signal"
+	"time"
 
 	"github.com/MuhammadBilal64/go-scale/internal/storage"
-
-	"encoding/json"
 )
 
 type Server struct {
@@ -97,12 +100,28 @@ func main() {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/health", healthHandler)
 	mux.HandleFunc("/kv/{key}", server.kvHandler)
+	httpServer := &http.Server{
+		Addr:    ":8085",
+		Handler: mux,
+	}
 
-	err := http.ListenAndServe(":8085", mux)
+	quit := make(chan os.Signal, 1)
+	signal.Notify(quit, os.Interrupt)
+	go func() {
+		err := httpServer.ListenAndServe()
+		if err != nil {
+			panic(err)
+		}
+	}()
+	<-quit
 
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	err := httpServer.Shutdown(ctx)
 	if err != nil {
 		panic(err)
 	}
+
 }
 
 //
