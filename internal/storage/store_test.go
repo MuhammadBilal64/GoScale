@@ -5,8 +5,23 @@ import (
 	"testing"
 )
 
+type fakePersistence struct {
+	data map[string]string
+}
+
+func (f *fakePersistence) Save(data map[string]string) error {
+	data = data
+	return nil
+}
+func (f *fakePersistence) Load() (map[string]string, error) {
+	return f.data, nil
+}
+
 func TestStoreGetAndSet(t *testing.T) {
-	store := NewStore()
+	persistence := &fakePersistence{
+		data: make(map[string]string),
+	}
+	store := NewStore(persistence)
 
 	store.Set("name", "Bilal")
 
@@ -20,8 +35,10 @@ func TestStoreGetAndSet(t *testing.T) {
 
 }
 func TestStoreGetMissing(t *testing.T) {
-	store := NewStore()
-
+	persistence := &fakePersistence{
+		data: make(map[string]string),
+	}
+	store := NewStore(persistence)
 	value, exists := store.Get("not-a-problem")
 
 	if exists {
@@ -33,7 +50,10 @@ func TestStoreGetMissing(t *testing.T) {
 	}
 }
 func TestStoreDelete(t *testing.T) {
-	store := NewStore()
+	persistence := &fakePersistence{
+		data: make(map[string]string),
+	}
+	store := NewStore(persistence)
 	store.Set("name", "bilal")
 	store.Delete("name")
 	_, exists := store.Get("name")
@@ -43,7 +63,10 @@ func TestStoreDelete(t *testing.T) {
 }
 func TestStoreConcurrentAccess(t *testing.T) {
 	var wg sync.WaitGroup
-	store := NewStore()
+	persistence := &fakePersistence{
+		data: make(map[string]string),
+	}
+	store := NewStore(persistence)
 	wg.Add(2)
 	go func() {
 		defer wg.Done()
