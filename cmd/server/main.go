@@ -3,12 +3,20 @@ package main
 import (
 	"context"
 	"encoding/json"
+	"log"
 	"net/http"
 	"os"
 	"os/signal"
 	"time"
 
+	"github.com/MuhammadBilal64/go-scale/internal/persistence"
 	"github.com/MuhammadBilal64/go-scale/internal/storage"
+)
+
+const (
+	walFilePath      = "data.wal"
+	snapshotFilePath = "snapshot.json"
+	compactEvery     = 100
 )
 
 type Server struct {
@@ -52,7 +60,10 @@ func (s *Server) kvHandler(w http.ResponseWriter, r *http.Request) {
 			writeJSON(w, http.StatusBadRequest, ErrorResponse{Error: "invalid Json"})
 			return
 		}
-		s.store.Set(key, req.Value)
+		if err := s.store.Set(key, req.Value); err != nil {
+			writeJSON(w, http.StatusInternalServerError, ErrorResponse{Error: "failed to store value"})
+			return
+		}
 
 		response := map[string]string{
 			"message": "value stored",
@@ -60,7 +71,10 @@ func (s *Server) kvHandler(w http.ResponseWriter, r *http.Request) {
 
 		writeJSON(w, http.StatusOK, response)
 	case http.MethodDelete:
-		s.store.Delete(key)
+		if err := s.store.Delete(key); err != nil {
+			writeJSON(w, http.StatusInternalServerError, ErrorResponse{Error: "failed to delete value"})
+			return
+		}
 
 		response := map[string]string{
 			"message": "value deleted",
@@ -93,7 +107,12 @@ func healthHandler(w http.ResponseWriter, r *http.Request) {
 	w.Write([]byte("OK"))
 }
 func main() {
-	store := storage.NewStore()
+	engine := persistence.NewEngine(walFilePath, snapshotFilePath, compactEvery)
+	store := storage.NewStore(engine)
+	if err := store.Load(); err != nil {
+		log.Fatalf("failed to load store: %v", err)
+	}
+
 	server := Server{
 		store: store,
 	}
@@ -109,8 +128,8 @@ func main() {
 	signal.Notify(quit, os.Interrupt)
 	go func() {
 		err := httpServer.ListenAndServe()
-		if err != nil {
-			panic(err)
+		if err != nil && err != http.ErrServerClosed {
+			log.Fatalf("server error: %v", err)
 		}
 	}()
 	<-quit
@@ -119,7 +138,7 @@ func main() {
 	defer cancel()
 	err := httpServer.Shutdown(ctx)
 	if err != nil {
-		panic(err)
+		log.Fatalf("shutdown error: %v", err)
 	}
 
 }
