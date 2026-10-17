@@ -25,6 +25,9 @@ func (f *FilePersistence) Save(data map[string]string) error {
 func (f *FilePersistence) Load() (map[string]string, error) {
 	jsonData, err := os.ReadFile(f.path)
 	if err != nil {
+		if os.IsNotExist(err) {
+			return make(map[string]string), nil
+		}
 		return nil, err
 	}
 
@@ -33,6 +36,9 @@ func (f *FilePersistence) Load() (map[string]string, error) {
 	err = json.Unmarshal(jsonData, &data)
 	if err != nil {
 		return nil, err
+	}
+	if data == nil {
+		data = make(map[string]string)
 	}
 
 	return data, nil

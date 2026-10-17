@@ -1,12 +1,13 @@
 package persistence
 
 import (
+	"path/filepath"
 	"testing"
 )
 
 func TestFilePersistenceSaveAndLoad(t *testing.T) {
 	tempDir := t.TempDir()
-	filePath := tempDir + "/data.json"
+	filePath := filepath.Join(tempDir, "data.json")
 	persistence := NewFilePersistence(filePath)
 
 	data := map[string]string{
@@ -27,5 +28,18 @@ func TestFilePersistenceSaveAndLoad(t *testing.T) {
 
 	if loadedData["role"] != "backend engineer" {
 		t.Fatalf("expected role backend engineer, got %s", loadedData["role"])
+	}
+}
+
+func TestFilePersistenceLoadMissingFile(t *testing.T) {
+	filePath := filepath.Join(t.TempDir(), "missing.json")
+	persistence := NewFilePersistence(filePath)
+
+	loadedData, err := persistence.Load()
+	if err != nil {
+		t.Fatalf("expected Load to succeed for missing file, got %v", err)
+	}
+	if len(loadedData) != 0 {
+		t.Fatalf("expected empty map, got %v", loadedData)
 	}
 }

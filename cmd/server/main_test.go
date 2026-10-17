@@ -3,14 +3,22 @@ package main
 import (
 	"net/http"
 	"net/http/httptest"
+	"path/filepath"
 	"strings"
 	"testing"
 
+	"github.com/MuhammadBilal64/go-scale/internal/persistence"
 	"github.com/MuhammadBilal64/go-scale/internal/storage"
 )
 
+func newTestStore(t *testing.T) *storage.Store {
+	t.Helper()
+	path := filepath.Join(t.TempDir(), "data.json")
+	return storage.NewStore(persistence.NewFilePersistence(path))
+}
+
 func TestKVHandlerGet(t *testing.T) {
-	store := storage.NewStore()
+	store := newTestStore(t)
 	store.Set("name", "Bilal")
 
 	server := Server{
@@ -19,7 +27,6 @@ func TestKVHandlerGet(t *testing.T) {
 
 	mux := http.NewServeMux()
 	mux.HandleFunc("/kv/{key}", server.kvHandler)
-	//httptest.NewRequest(method, target, body)
 	req := httptest.NewRequest(http.MethodGet, "/kv/name", nil)
 	rec := httptest.NewRecorder()
 	mux.ServeHTTP(rec, req)
@@ -28,7 +35,7 @@ func TestKVHandlerGet(t *testing.T) {
 	}
 }
 func TestKVHandlerGetMissing(t *testing.T) {
-	store := storage.NewStore()
+	store := newTestStore(t)
 
 	server := Server{
 		store: store,
@@ -53,7 +60,7 @@ func TestKVHandlerGetMissing(t *testing.T) {
 }
 
 func TestKVHandlerPut(t *testing.T) {
-	store := storage.NewStore()
+	store := newTestStore(t)
 
 	server := Server{
 		store: store,
@@ -88,7 +95,7 @@ func TestKVHandlerPut(t *testing.T) {
 
 }
 func TestKVHandlerPutInvalidJSON(t *testing.T) {
-	store := storage.NewStore()
+	store := newTestStore(t)
 
 	server := Server{
 		store: store,
@@ -112,7 +119,7 @@ func TestKVHandlerPutInvalidJSON(t *testing.T) {
 	}
 }
 func TestKVHandlerDelete(t *testing.T) {
-	store := storage.NewStore()
+	store := newTestStore(t)
 	store.Set("name", "Bilal")
 
 	server := Server{

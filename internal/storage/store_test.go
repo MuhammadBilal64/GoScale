@@ -80,3 +80,24 @@ func TestStoreConcurrentAccess(t *testing.T) {
 	wg.Wait()
 
 }
+
+func TestStoreLoad(t *testing.T) {
+	persistence := &fakePersistence{
+		data: map[string]string{
+			"name": "Bilal",
+		},
+	}
+	store := NewStore(persistence)
+
+	if err := store.Load(); err != nil {
+		t.Fatalf("expected Load to succeed, got %v", err)
+	}
+
+	value, exists := store.Get("name")
+	if !exists {
+		t.Fatal("expected key to exist after Load")
+	}
+	if value != "Bilal" {
+		t.Fatalf("expected Bilal, got %s", value)
+	}
+}

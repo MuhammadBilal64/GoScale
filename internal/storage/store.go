@@ -43,7 +43,12 @@ func (s *Store) Load() error {
 	if err != nil {
 		return err
 	}
+	if data == nil {
+		data = make(map[string]string)
+	}
 
+	s.mu.Lock()
+	defer s.mu.Unlock()
 	s.data = data
 	return nil
 }
