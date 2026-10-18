@@ -5,13 +5,13 @@ import (
 	"time"
 )
 
-// HealthFunc checks whether a peer address is healthy.
-type HealthFunc func(ctx context.Context, baseURL string) error
+// PeerCheckFunc checks whether a configured peer is healthy and identity-correct.
+type PeerCheckFunc func(ctx context.Context, peer Peer) error
 
 // RunHeartbeats periodically probes peers until ctx is cancelled.
-func (m *Membership) RunHeartbeats(ctx context.Context, interval time.Duration, check HealthFunc) {
+func (m *Membership) RunHeartbeats(ctx context.Context, interval time.Duration, check PeerCheckFunc) {
 	if check == nil {
-		check = CheckHealth
+		check = CheckPeer
 	}
 	if interval <= 0 {
 		interval = 2 * time.Second
@@ -32,12 +32,12 @@ func (m *Membership) RunHeartbeats(ctx context.Context, interval time.Duration, 
 	}
 }
 
-func (m *Membership) probeAll(ctx context.Context, check HealthFunc) {
+func (m *Membership) probeAll(ctx context.Context, check PeerCheckFunc) {
 	for _, peer := range m.Peers() {
 		if ctx.Err() != nil {
 			return
 		}
-		if err := check(ctx, peer.Addr); err != nil {
+		if err := check(ctx, peer); err != nil {
 			m.RecordFailure(peer.ID, err)
 			continue
 		}

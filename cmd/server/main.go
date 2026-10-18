@@ -200,7 +200,7 @@ func main() {
 	}()
 
 	// Start heartbeats only after the listener is bound.
-	go membership.RunHeartbeats(hbCtx, 2*time.Second, node.CheckHealth)
+	go membership.RunHeartbeats(hbCtx, 2*time.Second, node.CheckPeer)
 
 	<-quit
 

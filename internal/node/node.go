@@ -76,6 +76,9 @@ func ValidateConfig(selfID string, peers []Peer) error {
 		if err != nil || u.Host == "" {
 			return fmt.Errorf("peer %q has invalid addr %q; use host:port (e.g. 127.0.0.1:8086)", p.ID, p.Addr)
 		}
+		if (u.Path != "" && u.Path != "/") || u.RawQuery != "" || u.Fragment != "" {
+			return fmt.Errorf("peer %q has invalid addr %q; path/query are not allowed", p.ID, p.Addr)
+		}
 		host, port, err := net.SplitHostPort(u.Host)
 		if err != nil || host == "" || port == "" {
 			return fmt.Errorf("peer %q has invalid addr %q; use host:port (e.g. 127.0.0.1:8086)", p.ID, p.Addr)
@@ -86,6 +89,9 @@ func ValidateConfig(selfID string, peers []Peer) error {
 
 func validateHostPort(hostPort string) error {
 	hostPort = strings.TrimPrefix(strings.TrimPrefix(hostPort, "http://"), "https://")
+	if strings.ContainsAny(hostPort, "/?#") {
+		return fmt.Errorf("invalid address %q; path/query are not allowed, use host:port (e.g. 127.0.0.1:8086)", hostPort)
+	}
 	host, port, err := net.SplitHostPort(hostPort)
 	if err != nil || host == "" || port == "" {
 		return fmt.Errorf("invalid address %q; use host:port (e.g. 127.0.0.1:8086), not :8086", hostPort)

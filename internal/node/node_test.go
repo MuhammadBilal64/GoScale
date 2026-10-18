@@ -49,3 +49,9 @@ func TestValidateConfigRejectsSelfPeer(t *testing.T) {
 		t.Fatal("expected error when peer id equals self id")
 	}
 }
+
+func TestParsePeersRejectsPath(t *testing.T) {
+	if _, err := ParsePeers("node-2@127.0.0.1:8086/admin"); err == nil {
+		t.Fatal("expected error for peer address with path")
+	}
+}
