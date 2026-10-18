@@ -100,3 +100,36 @@ func TestEngineSurvivesRestart(t *testing.T) {
 		t.Fatalf("unexpected state after restart: %v", loaded)
 	}
 }
+
+func TestEngineLoadRestoresCompactCounter(t *testing.T) {
+	dir := t.TempDir()
+	walPath := filepath.Join(dir, "data.wal")
+	snapshotPath := filepath.Join(dir, "snapshot.json")
+
+	engine1 := NewEngine(walPath, snapshotPath, 3)
+	_ = engine1.Append(Entry{Op: OpSet, Key: "a", Value: "1"})
+	_ = engine1.Append(Entry{Op: OpSet, Key: "b", Value: "2"})
+
+	engine2 := NewEngine(walPath, snapshotPath, 3)
+	if _, err := engine2.Load(); err != nil {
+		t.Fatalf("load: %v", err)
+	}
+	if engine2.sinceCompact != 2 {
+		t.Fatalf("expected sinceCompact=2 after load, got %d", engine2.sinceCompact)
+	}
+
+	_ = engine2.Append(Entry{Op: OpSet, Key: "c", Value: "3"})
+	if err := engine2.Compact(map[string]string{"a": "1", "b": "2", "c": "3"}); err != nil {
+		t.Fatalf("compact: %v", err)
+	}
+	if engine2.sinceCompact != 0 {
+		t.Fatalf("expected sinceCompact=0 after compact, got %d", engine2.sinceCompact)
+	}
+	info, err := os.Stat(walPath)
+	if err != nil {
+		t.Fatalf("stat wal: %v", err)
+	}
+	if info.Size() != 0 {
+		t.Fatalf("expected empty wal after compact triggered by restored counter, size=%d", info.Size())
+	}
+}

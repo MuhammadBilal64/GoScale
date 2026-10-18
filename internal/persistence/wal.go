@@ -36,11 +36,12 @@ func (w *WAL) Append(entry Entry) error {
 }
 
 func (w *WAL) Load() (map[string]string, error) {
-	return w.Replay(make(map[string]string))
+	data, _, err := w.Replay(make(map[string]string))
+	return data, err
 }
 
-// Replay applies WAL entries on top of base and returns the result.
-func (w *WAL) Replay(base map[string]string) (map[string]string, error) {
+// Replay applies WAL entries on top of base and returns the result plus entry count.
+func (w *WAL) Replay(base map[string]string) (map[string]string, int, error) {
 	if base == nil {
 		base = make(map[string]string)
 	}
@@ -48,9 +49,9 @@ func (w *WAL) Replay(base map[string]string) (map[string]string, error) {
 	f, err := os.Open(w.path)
 	if err != nil {
 		if os.IsNotExist(err) {
-			return base, nil
+			return base, 0, nil
 		}
-		return nil, err
+		return nil, 0, err
 	}
 	needClose := true
 	defer func() {
@@ -61,9 +62,10 @@ func (w *WAL) Replay(base map[string]string) (map[string]string, error) {
 
 	info, err := f.Stat()
 	if err != nil {
-		return nil, err
+		return nil, 0, err
 	}
 
+	count := 0
 	dec := json.NewDecoder(f)
 	for {
 		offset := dec.InputOffset()
@@ -79,11 +81,11 @@ func (w *WAL) Replay(base map[string]string) (map[string]string, error) {
 				needClose = false
 				_ = f.Close()
 				if truncErr := os.Truncate(w.path, offset); truncErr != nil {
-					return nil, truncErr
+					return nil, 0, truncErr
 				}
 				break
 			}
-			return nil, err
+			return nil, 0, err
 		}
 
 		switch entry.Op {
@@ -92,9 +94,10 @@ func (w *WAL) Replay(base map[string]string) (map[string]string, error) {
 		case OpDelete:
 			delete(base, entry.Key)
 		}
+		count++
 	}
 
-	return base, nil
+	return base, count, nil
 }
 
 // Truncate clears the WAL after a successful snapshot.

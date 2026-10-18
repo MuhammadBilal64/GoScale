@@ -3,3 +3,4 @@ data.json
 data.wal
 snapshot.json
 *.tmp
+/data/
